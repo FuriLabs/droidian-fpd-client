@@ -16,6 +16,10 @@ add_executable(droidian-fpd-client ${COMMON_SOURCES} src/fpdclient.cpp)
 target_link_libraries(droidian-fpd-client Qt5::Core Qt5::DBus)
 target_include_directories(droidian-fpd-client PRIVATE src)
 
+add_executable(fpd2fprintd ${COMMON_SOURCES} src/fpd2fprintd.cpp)
+target_link_libraries(fpd2fprintd Qt5::Core Qt5::DBus)
+target_include_directories(fpd2fprintd PRIVATE src)
+
 set(FPDGUI_SOURCES
     src/fpdgui.cpp
     src/fpdinterfaceqmladapter.cpp
