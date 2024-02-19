@@ -46,6 +46,10 @@ class FprintDeviceService : public QObject
     Q_PROPERTY(bool finger_present READ isFingerPresent CONSTANT)
     Q_PROPERTY(bool finger_needed READ isFingerNeeded CONSTANT)
 
+    FPDInterface fpdInterface;
+    QEventLoop enrollLoop;
+    QEventLoop verifyLoop;
+
 public:
     explicit FprintDeviceService(QObject *parent = nullptr) : QObject(parent) {}
 
@@ -59,7 +63,6 @@ public slots:
     QStringList ListEnrolledFingers(const QString &username) { // username is unused, fpd is a single user daemon
         // qDebug() << "ListEnrolledFingers called for user:" << username;
 
-        FPDInterface fpdInterface;
         QStringList fingers = fpdInterface.fingerprints();
         return fingers;
     }
@@ -67,7 +70,6 @@ public slots:
     void DeleteEnrolledFingers(const QString &username) { // username is unused, fpd is a single user daemon
         // qDebug() << "DeleteEnrolledFingers called for user:" << username;
 
-        FPDInterface fpdInterface;
         QStringList fingers = fpdInterface.fingerprints();
         for (const QString &finger : fingers) {
             fpdInterface.remove(finger);
@@ -78,7 +80,6 @@ public slots:
     void DeleteEnrolledFingers2() {
         // qDebug() << "DeleteEnrolledFingers2 called";
 
-        FPDInterface fpdInterface;
         QStringList fingers = fpdInterface.fingerprints();
         for (const QString &finger : fingers) {
             fpdInterface.remove(finger);
@@ -87,9 +88,8 @@ public slots:
     }
 
     void DeleteEnrolledFinger(const QString &fingerName) {
-        qDebug() << "DeleteEnrolledFinger called for finger:" << fingerName;
+        // qDebug() << "DeleteEnrolledFinger called for finger:" << fingerName;
 
-        FPDInterface fpdInterface;
         if (fpdInterface.fingerprints().contains(fingerName)) {
             fpdInterface.remove(fingerName);
         } else {
@@ -109,49 +109,57 @@ public slots:
     }
 
     void VerifyStart(const QString &fingerName) {
-        // qDebug() << "VerifyStart called for finger:" << fingerName;
+        qDebug() << "VerifyStart called for finger:" << fingerName;
 
-        FPDInterface fpdInterface;
-        QObject::connect(&fpdInterface, &FPDInterface::identified, [this, fingerName](const QString &identifiedFinger) {
-            // qDebug() << "Identification process completed for finger:" << fingerName;
+        QObject::connect(&fpdInterface, &FPDInterface::identified, this, [this, fingerName](const QString &identifiedFinger) {
+            qDebug() << "Identified finger is: " << identifiedFinger;
             if (identifiedFinger == fingerName) {
-                // qDebug() << "Finger verified successfully:" << fingerName;
+                verifyLoop.quit();
+                qDebug() << "Finger verified successfully:" << fingerName;
                 emit VerifyStatus("verify-match", true);
+                emit VerifyFingerSelected(fingerName);
+                // verifyLoop.wakeUp();
             } else {
-                // qDebug() << "Failed to verify finger:" << fingerName;
+                verifyLoop.quit();
+                qDebug() << "Failed to verify finger:" << fingerName;
                 emit VerifyStatus("verify-no-match", false);
+                verifyLoop.wakeUp();
             }
+
         });
 
-        // exits early, so signals never get called and it gets stuck
         fpdInterface.identify();
+        verifyLoop.exec();
     }
 
     void VerifyStop() {
         // qDebug() << "VerifyStop called";
-        // not possible with fpd
+        verifyLoop.quit(); // this isn't exactly what verify stop is supposed to do but good enough for now
     }
 
     void EnrollStart(const QString &fingerName) {
         // qDebug() << "EnrollStart called for finger:" << fingerName;
 
-        FPDInterface fpdInterface;
-        QObject::connect(&fpdInterface, &FPDInterface::enrollProgressChanged,
-            [](int progress) {
-                if (progress == 100) {
-                    return;
-                } else {
-                    qDebug() << progress;
-                }
+        QObject::connect(&fpdInterface, &FPDInterface::enrollProgressChanged, this, [this, fingerName](int progress) {
+            // qDebug() << progress;
+
+            if (progress == 100) {
+                emit EnrollStatus("enroll-completed" ,true);
+                enrollLoop.quit();
+            } else {
+                enrollLoop.quit();
+                emit EnrollStatus("enroll-stage-passed", false);
+                enrollLoop.wakeUp();
             }
-        );
+        });
 
         fpdInterface.enroll(fingerName);
+        enrollLoop.exec();
     }
 
     void EnrollStop() {
         // qDebug() << "EnrollStop called";
-        // not possible with fpd
+        enrollLoop.quit(); // this isn't exactly what enroll stop is supposed to do but good enough for now
     }
 
 signals:
