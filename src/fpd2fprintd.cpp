@@ -10,8 +10,11 @@
 #include <QtDBus/QDBusObjectPath>
 #include <QtCore/QObject>
 #include <QtDBus/QtDBus>
+#include <QDBusContext>
+#include <QThread>
 #include <QDebug>
 #include <QList>
+#include <QSet>
 #include "fpdinterface.h"
 
 class FprintManagerService : public QObject
@@ -36,7 +39,7 @@ public slots:
     }
 };
 
-class FprintDeviceService : public QObject
+class FprintDeviceService : public QObject, protected QDBusContext
 {
     Q_OBJECT
     Q_CLASSINFO("D-Bus Interface", "net.reactivated.Fprint.Device")
@@ -49,6 +52,19 @@ class FprintDeviceService : public QObject
     FPDInterface fpdInterface;
     QEventLoop enrollLoop;
     QEventLoop verifyLoop;
+
+    QSet<QString> validFingerNames = {
+        "right-index-finger",
+        "left-index-finger",
+        "right-thumb",
+        "right-middle-finger",
+        "right-ring-finger",
+        "right-little-finger",
+        "left-thumb",
+        "left-middle-finger",
+        "left-ring-finger",
+        "left-little-finger"
+    };
 
 public:
     explicit FprintDeviceService(QObject *parent = nullptr) : QObject(parent) {}
@@ -64,6 +80,12 @@ public slots:
         // qDebug() << "ListEnrolledFingers called for user:" << username;
 
         QStringList fingers = fpdInterface.fingerprints();
+        if (fingers.isEmpty()) {
+            QString errorMessage = "User doesn't have any fingerprints enrolled";
+            QString errorName = "net.reactivated.Fprint.Error.NoEnrolledPrints";
+            sendErrorReply(errorName, errorMessage);
+        }
+
         return fingers;
     }
 
@@ -90,11 +112,16 @@ public slots:
     void DeleteEnrolledFinger(const QString &fingerName) {
         // qDebug() << "DeleteEnrolledFinger called for finger:" << fingerName;
 
-        if (fpdInterface.fingerprints().contains(fingerName)) {
-            fpdInterface.remove(fingerName);
-        } else {
+        if (!validFingerNames.contains(fingerName)) {
             QString errorMessage = "Invalid finger name";
             QString errorName = "net.reactivated.Fprint.Error.InvalidFingername";
+            sendErrorReply(errorName, errorMessage);
+        } else if (!fpdInterface.fingerprints().contains(fingerName)) {
+            QString errorMessage = "No enrolled prints for this finger";
+            QString errorName = "net.reactivated.Fprint.Error.NoEnrolledPrints";
+            sendErrorReply(errorName, errorMessage);
+        } else {
+            fpdInterface.remove(fingerName);
         }
     }
 
@@ -109,23 +136,27 @@ public slots:
     }
 
     void VerifyStart(const QString &fingerName) {
-        qDebug() << "VerifyStart called for finger:" << fingerName;
+        // qDebug() << "VerifyStart called for finger:" << fingerName;
+
+        QStringList fingers = fpdInterface.fingerprints();
+        if (fingers.isEmpty()) {
+            QString errorMessage = "User doesn't have any fingerprints enrolled";
+            QString errorName = "net.reactivated.Fprint.Error.NoEnrolledPrints";
+            sendErrorReply(errorName, errorMessage);
+        }
 
         QObject::connect(&fpdInterface, &FPDInterface::identified, this, [this, fingerName](const QString &identifiedFinger) {
-            qDebug() << "Identified finger is: " << identifiedFinger;
+            // qDebug() << "Identified finger is: " << identifiedFinger;
+            emit VerifyFingerSelected(fingerName);
             if (identifiedFinger == fingerName) {
                 verifyLoop.quit();
-                qDebug() << "Finger verified successfully:" << fingerName;
+                // qDebug() << "Finger verified successfully:" << fingerName;
                 emit VerifyStatus("verify-match", true);
-                emit VerifyFingerSelected(fingerName);
-                // verifyLoop.wakeUp();
             } else {
                 verifyLoop.quit();
-                qDebug() << "Failed to verify finger:" << fingerName;
+                // qDebug() << "Failed to verify finger:" << fingerName;
                 emit VerifyStatus("verify-no-match", false);
-                verifyLoop.wakeUp();
             }
-
         });
 
         fpdInterface.identify();
@@ -139,6 +170,11 @@ public slots:
 
     void EnrollStart(const QString &fingerName) {
         // qDebug() << "EnrollStart called for finger:" << fingerName;
+        if (!validFingerNames.contains(fingerName)) {
+            QString errorMessage = "Invalid finger name";
+            QString errorName = "net.reactivated.Fprint.Error.InvalidFingername";
+            sendErrorReply(errorName, errorMessage);
+        }
 
         QObject::connect(&fpdInterface, &FPDInterface::enrollProgressChanged, this, [this, fingerName](int progress) {
             // qDebug() << progress;
