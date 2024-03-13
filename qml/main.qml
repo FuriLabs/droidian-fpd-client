@@ -39,6 +39,7 @@ ApplicationWindow {
         Button {
             text: "Remove"
             width: parent.width
+
             onClicked: {
                 if (fingerList.currentText === "") {
                     messageLabel.text = "Please select a finger from the list."
@@ -93,6 +94,7 @@ ApplicationWindow {
         title: "Enroll Finger"
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel
+        width: parent.width > 400 ? 400 : parent.width
         anchors.centerIn: parent
 
         TextField {
@@ -192,29 +194,43 @@ ApplicationWindow {
     Button {
         text: "About"
         width: parent.width
+        anchors.bottom: parent.bottom
+
         onClicked: {
             aboutDialog.open()
         }
-        anchors.bottom: parent.bottom
     }
 
     Connections {
         target: fpdInterface
-        onFingerprintsChanged: {
+        function onFingerprintsChanged() {
             fingerList.model = formatFingerNames(fpdInterface.fingerprints)
         }
-        onMessageChanged: messageLabel.text = msg
-        onEnrollmentProgressChanged: {
-            enrollmentProgressBigLabel.text = progress + "%"
+
+        function onMessageChanged() {
+            messageLabel.text = fpdInterface.message
         }
-        onAcquisitionInfoChanged: {
-            if (info === "FPACQUIRED_GOOD") {
-                acquisitionInfoLabel.text = "Sensor read: Good";
-                acquisitionInfoLabel.color = "green";
-            } else if (info === "FPACQUIRED_PARTIAL") {
-                acquisitionInfoLabel.text = "Sensor read: Partial";
-                acquisitionInfoLabel.color = "orange";
-            }
+
+        function onEnrollmentProgressChanged() {
+            enrollmentProgressChanged(fpdInterface.enrollmentProgress);
+        }
+
+        function onAcquisitionInfoChanged() {
+            acquisitionInfoChanged(fpdInterface.acquisitionInfo);
+        }
+    }
+
+    function enrollmentProgressChanged(progress) {
+        enrollmentProgressBigLabel.text = progress + "%";
+    }
+
+    function acquisitionInfoChanged(info) {
+        if (info === "FPACQUIRED_GOOD") {
+            acquisitionInfoLabel.text = "Sensor read: Good";
+            acquisitionInfoLabel.color = "green";
+        } else if (info === "FPACQUIRED_PARTIAL") {
+            acquisitionInfoLabel.text = "Sensor read: Partial";
+            acquisitionInfoLabel.color = "orange";
         }
     }
 }

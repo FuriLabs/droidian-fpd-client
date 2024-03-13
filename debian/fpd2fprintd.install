@@ -1,2 +1,2 @@
 /usr/libexec/fpd2fprintd
-10-hybris.conf /usr/lib/systemd/system/fprintd.service.d/
+data/10-hybris.conf /usr/lib/systemd/system/fprintd.service.d/

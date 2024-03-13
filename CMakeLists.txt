@@ -7,17 +7,17 @@ project(droidian-fpd)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt5 COMPONENTS Core DBus Quick REQUIRED)
+find_package(Qt6 COMPONENTS Core DBus Quick REQUIRED)
 
 set(COMMON_SOURCES src/fpdinterface.cpp)
 set(COMMON_HEADERS src/fpdinterface.h)
 
 add_executable(droidian-fpd-client ${COMMON_SOURCES} src/fpdclient.cpp)
-target_link_libraries(droidian-fpd-client Qt5::Core Qt5::DBus)
+target_link_libraries(droidian-fpd-client Qt6::Core Qt6::DBus)
 target_include_directories(droidian-fpd-client PRIVATE src)
 
 add_executable(fpd2fprintd ${COMMON_SOURCES} src/fpd2fprintd.cpp)
-target_link_libraries(fpd2fprintd Qt5::Core Qt5::DBus)
+target_link_libraries(fpd2fprintd Qt6::Core Qt6::DBus)
 target_include_directories(fpd2fprintd PRIVATE src)
 
 set(FPDGUI_SOURCES
@@ -30,15 +30,15 @@ set(FPDGUI_HEADERS
 )
 
 add_executable(droidian-fpd-gui ${COMMON_SOURCES} ${FPDGUI_SOURCES})
-target_link_libraries(droidian-fpd-gui Qt5::Core Qt5::DBus Qt5::Quick)
+target_link_libraries(droidian-fpd-gui Qt6::Core Qt6::DBus Qt6::Quick)
 target_include_directories(droidian-fpd-gui PRIVATE src)
 
 add_executable(fpdlistener ${COMMON_SOURCES} src/fpdlistener.cpp)
-target_link_libraries(fpdlistener Qt5::Core Qt5::DBus -lbatman-wrappers)
+target_link_libraries(fpdlistener Qt6::Core Qt6::DBus -lbatman-wrappers)
 target_include_directories(fpdlistener PRIVATE src)
 
 add_executable(droidian-fpd-identify ${COMMON_SOURCES} src/fpdidentify.cpp)
-target_link_libraries(droidian-fpd-identify Qt5::Core Qt5::DBus -lbatman-wrappers)
+target_link_libraries(droidian-fpd-identify Qt6::Core Qt6::DBus -lbatman-wrappers)
 target_include_directories(droidian-fpd-identify PRIVATE src)
 
 add_library(pam_fpd SHARED pam/pam_fpd.c)
@@ -68,16 +68,16 @@ install(TARGETS pam_fpd
         LIBRARY DESTINATION lib/${ARCH_TRIPLET}/security
         PERMISSIONS OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
-install(FILES fpdlistener.service DESTINATION lib/systemd/user
+install(FILES data/fpdlistener.service DESTINATION lib/systemd/user
         PERMISSIONS OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
-install(FILES droidian-fpd-client.conf DESTINATION share/droidian-fpd-client
+install(FILES data/droidian-fpd-client.conf DESTINATION share/droidian-fpd-client
         PERMISSIONS OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
-install(FILES droidian-fpd-gui.desktop DESTINATION share/applications
+install(FILES data/droidian-fpd-gui.desktop DESTINATION share/applications
         PERMISSIONS OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
-install(FILES droidian-fingerprint.png DESTINATION share/icons
+install(FILES data/droidian-fingerprint.png DESTINATION share/icons
         PERMISSIONS OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
 install(DIRECTORY qml/ DESTINATION lib/droidian-fingerprint
