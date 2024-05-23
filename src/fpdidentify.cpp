@@ -7,7 +7,6 @@
 #include <QCoreApplication>
 #include <QTextStream>
 #include <QDebug>
-#include <QProcess>
 #include "fpdinterface.h"
 
 int main(int argc, char *argv[])
@@ -18,30 +17,14 @@ int main(int argc, char *argv[])
 
     QObject::connect(&fpdInterface, &FPDInterface::identified, [](const QString &finger) {
         qDebug() << "Identified finger:" << finger;
-
-        QProcess *process = new QProcess();
-        QString command = "fbcli -E bell-terminal";
-        process->start("bash", QStringList() << "-c" << command);
-
-        QObject::connect(process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-            [&](int exitCode, QProcess::ExitStatus exitStatus) {
-                process->deleteLater(); // Schedule the process for deletion
-                QCoreApplication::exit(exitCode);
-            });
+        QCoreApplication::exit(0);
     });
 
     QObject::connect(&fpdInterface, &FPDInterface::errorInfo, [](const QString &info) {
         qDebug() << "Error info:" << info;
 
         if (info.contains("FINGER_NOT_RECOGNIZED")) {
-            QProcess *process = new QProcess();
-            QString vibra_bad = "for i in {0..2}; do fbcli -E button-pressed; done";
-            process->start("bash", QStringList() << "-c" << vibra_bad);
-
-            QObject::connect(process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-                [process](int, QProcess::ExitStatus) {
-                    process->deleteLater(); // Schedule the process for deletion
-                });
+            qDebug() << "Finger not recognized";
         }
 
         QCoreApplication::exit(1);
