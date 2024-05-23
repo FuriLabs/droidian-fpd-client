@@ -70,7 +70,7 @@ void FPDInterfaceQmlAdapter::remove(const QString &finger)
         m_fpdInterface.remove(formattedFinger);
         emit fingerprintsChanged();
 
-        QProcess::execute("systemctl", QStringList() << "restart" << "--user" << "droidian-fpd-unlocker");
+        QProcess::execute("systemctl", QStringList() << "restart" << "--user" << "fpdlistener");
     }
 }
 
