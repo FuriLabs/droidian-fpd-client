@@ -1,6 +1,7 @@
 [Unit]
 Description=Droidian fingerprint listener
 After=sm.puri.Phosh.service
+PartOf=sm.puri.Phosh.service
 StartLimitBurst=5000
 StartLimitIntervalSec=0
 
