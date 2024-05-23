@@ -71,9 +71,6 @@ install(TARGETS pam_fpd
 install(FILES data/fpdlistener.service DESTINATION lib/systemd/user
         PERMISSIONS OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
-install(FILES data/droidian-fpd-client.conf DESTINATION share/droidian-fpd-client
-        PERMISSIONS OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
-
 install(FILES data/droidian-fpd-gui.desktop DESTINATION share/applications
         PERMISSIONS OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
