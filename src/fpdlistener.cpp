@@ -3,7 +3,9 @@
 //
 // Authors:
 // Bardia Moshiri <fakeshell@bardia.tech>
+// Jesús Higueras <jesus@dabbleam.com>
 
+#include <stdio.h>
 #include <unistd.h>
 #include <batman/wlrdisplay.h>
 #include <QCoreApplication>
@@ -12,6 +14,28 @@
 #include <QDBusInterface>
 #include <QDBusReply>
 #include "fpdinterface.h"
+
+static bool isCollectionLocked() {
+    const QString service = "org.freedesktop.secrets";
+    const QString path = "/org/freedesktop/secrets/collection/login";
+    const QString interface = "org.freedesktop.Secret.Collection";
+    const QString property = "Locked";
+
+    QDBusInterface dbusInterface(service, path, "org.freedesktop.DBus.Properties", QDBusConnection::sessionBus());
+    if (!dbusInterface.isValid()) {
+        qWarning() << "D-Bus interface is not valid!";
+        return false;
+    }
+
+    QDBusReply<QVariant> reply = dbusInterface.call("Get", interface, property);
+    if (reply.isValid()) {
+        bool isLocked = reply.value().toBool();
+        return isLocked;
+    } else {
+        qWarning() << "Failed to get property:" << reply.error().message();
+        return false;
+    }
+}
 
 static void unlockSession(const QString &sessionId, int &exitStatus) {
     QDBusInterface interface("org.freedesktop.login1", "/org/freedesktop/login1", "org.freedesktop.login1.Manager", QDBusConnection::systemBus());
@@ -58,7 +82,9 @@ void fpdunlocker(const QString& sessionId, int &exitStatus) {
     QObject::connect(&fpdInterface, &FPDInterface::identified, [&](const QString &finger) {
         qDebug() << "Identified finger: " << finger;
 
-        if (wlrdisplay_status() == 0) {
+        bool locked = isCollectionLocked();
+
+        if (wlrdisplay_status() == 0 && !locked) {
             sendFeedback("button-released");
             unlockSession(sessionId, exitStatus);
         } else {
