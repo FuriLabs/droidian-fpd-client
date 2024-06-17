@@ -15,6 +15,15 @@
 #include <QDBusReply>
 #include "fpdinterface.h"
 
+extern "C" int wlrdisplay_status() {
+    int result = wlrdisplay(0, NULL);
+    return result != 0;
+}
+
+extern "C" int delay(double seconds) {
+    return usleep(seconds * 1000000);
+}
+
 static bool isCollectionLocked() {
     const QString service = "org.freedesktop.secrets";
     const QString path = "/org/freedesktop/secrets/collection/login";
@@ -37,7 +46,34 @@ static bool isCollectionLocked() {
     }
 }
 
-static void unlockSession(const QString &sessionId, int &exitStatus) {
+static QString getSessionId() {
+    QString sessionId;
+    FILE *fp = NULL;
+
+    while (true) {
+        fp = popen("loginctl list-sessions | awk '/tty7/{print $1}'", "r");
+        if (fp == NULL) {
+            qWarning() << "Failed to run command using popen.";
+            delay(1);
+            continue;
+        }
+
+        char buffer[64];
+        if (fgets(buffer, sizeof(buffer), fp) != NULL) {
+            sessionId = QString(buffer).trimmed();
+            pclose(fp);
+            break;
+        } else {
+            qWarning() << "Failed to read output";
+            pclose(fp);
+            delay(1);
+        }
+    }
+
+    return sessionId;
+}
+
+static void unlockSession(QString &sessionId, int &exitStatus) {
     QDBusInterface interface("org.freedesktop.login1", "/org/freedesktop/login1", "org.freedesktop.login1.Manager", QDBusConnection::systemBus());
     if (interface.isValid()) {
         QDBusReply<void> reply = interface.call("UnlockSession", sessionId);
@@ -45,21 +81,25 @@ static void unlockSession(const QString &sessionId, int &exitStatus) {
             exitStatus = 0;
         } else {
             qWarning() << "DBus call failed: " << reply.error().message();
-            exitStatus = 1;
+            if (reply.error().message().contains("No session") && reply.error().message().contains("known")) {
+                qWarning() << "Session ID invalid, re-probing for a new session ID.";
+                sessionId = getSessionId();
+
+                reply = interface.call("UnlockSession", sessionId);
+                if (reply.isValid()) {
+                    exitStatus = 0;
+                } else {
+                    qWarning() << "Retrying DBus call failed: " << reply.error().message();
+                    exitStatus = 1;
+                }
+            } else {
+                exitStatus = 1;
+            }
         }
     } else {
         qWarning() << "DBus interface is invalid";
         exitStatus = 1;
     }
-}
-
-extern "C" int wlrdisplay_status() {
-    int result = wlrdisplay(0, NULL);
-    return result != 0;
-}
-
-extern "C" int delay(double seconds) {
-    return usleep(seconds * 1000000);
 }
 
 void sendFeedback(const QString &event) {
@@ -74,7 +114,7 @@ void sendFeedback(const QString &event) {
     }
 }
 
-void fpdunlocker(const QString& sessionId, int &exitStatus) {
+void fpdunlocker(QString &sessionId, int &exitStatus) {
     FPDInterface fpdInterface;
     QEventLoop loop;
     exitStatus = 0;
@@ -83,11 +123,13 @@ void fpdunlocker(const QString& sessionId, int &exitStatus) {
         qDebug() << "Identified finger: " << finger;
 
         bool locked = isCollectionLocked();
-
         if (wlrdisplay_status() == 0 && !locked) {
             sendFeedback("button-released");
             unlockSession(sessionId, exitStatus);
         } else {
+            if (locked) {
+                qDebug() << "Keyring is still locked, discarding fingerprint request";
+            }
             exitStatus = 0;
         }
 
@@ -116,10 +158,11 @@ void fpdunlocker(const QString& sessionId, int &exitStatus) {
     loop.exec();
 }
 
-extern "C" void fpdrunner(const char *sessionId) {
+extern "C" void fpdrunner(const char *initialSessionId) {
+    QString sessionId(initialSessionId);
     int oldStat = -1;
 
-    while (1) {
+    while (true) {
         int dispStat = wlrdisplay_status() == 0 ? 1 : 0;
         int exitStatus = 0;
 
@@ -129,7 +172,7 @@ extern "C" void fpdrunner(const char *sessionId) {
             if (dispStat == 1) {
                 int unlocked = 0;
                 while (unlocked == 0) {
-                    fpdunlocker(QString(sessionId), exitStatus);
+                    fpdunlocker(sessionId, exitStatus);
                     if (exitStatus == 0) {
                         unlocked = 1;
                     } else {
@@ -148,29 +191,9 @@ int main(int argc, char *argv[]) {
 
     system("/usr/bin/binder-wait android.hardware.biometrics.fingerprint@2.1::IBiometricsFingerprint/default");
 
-    char sessionId[64] = {0};
-    FILE *fp = NULL;
+    QString sessionId = getSessionId();
 
-    while (1) {
-        fp = popen("loginctl list-sessions | awk '/tty7/{print $1}'", "r");
-        if (fp == NULL) {
-            qWarning() << "Failed to run command using popen.";
-            delay(1);
-            continue;
-        }
-
-        if (fgets(sessionId, sizeof(sessionId), fp) != NULL) {
-            sessionId[strcspn(sessionId, "\r\n")] = 0;
-            pclose(fp);
-            break;
-        } else {
-            qWarning() << "Failed to read output";
-            pclose(fp);
-            delay(1);
-        }
-    }
-
-    QThread *mainLoopThread = QThread::create([=](){ fpdrunner(sessionId); });
+    QThread *mainLoopThread = QThread::create([=]() { fpdrunner(sessionId.toUtf8().constData()); });
     QObject::connect(mainLoopThread, &QThread::finished, mainLoopThread, &QThread::deleteLater);
 
     mainLoopThread->start();
