@@ -98,6 +98,17 @@ static QString getSessionId() {
     }
 }
 
+static bool isScreenLocked(const QString &sessionId) {
+    QString sessionPath = QString("/org/freedesktop/login1/session/%1").arg(sessionId);
+    QDBusInterface props("org.freedesktop.login1", sessionPath, "org.freedesktop.DBus.Properties", QDBusConnection::systemBus());
+
+    QDBusReply<QVariant> reply = props.call("Get", "org.freedesktop.login1.Session",  "LockedHint");
+    if (reply.isValid()) {
+        return reply.value().toBool();
+    }
+    return false;
+}
+
 static void unlockSession(QString &sessionId, int &exitStatus) {
     QDBusInterface interface("org.freedesktop.login1", "/org/freedesktop/login1", "org.freedesktop.login1.Manager", QDBusConnection::systemBus());
     if (interface.isValid()) {
@@ -147,14 +158,18 @@ void fpdunlocker(QString &sessionId, int &exitStatus) {
     QObject::connect(&fpdInterface, &FPDInterface::identified, [&](const QString &finger) {
         qDebug() << "Identified finger: " << finger;
 
-        bool locked = isCollectionLocked();
-        if (wlrdisplay_status() == 0 && !locked) {
+        bool keyring_locked = isCollectionLocked();
+        bool screen_locked = isScreenLocked(sessionId);
+        if (wlrdisplay_status() == 0 && screen_locked && !keyring_locked) {
             sendFeedback("button-released");
             unlockSession(sessionId, exitStatus);
         } else {
-            if (locked) {
+            if (keyring_locked)
                 qDebug() << "Keyring is still locked, discarding fingerprint request";
-            }
+            if (!screen_locked)
+                qDebug() << "Screen is unlocked, discarding fingerprint request";
+            if (wlrdisplay_status() != 0)
+                qDebug() << "Display is off, discarding fingerprint request";
             exitStatus = 0;
         }
 
@@ -167,13 +182,18 @@ void fpdunlocker(QString &sessionId, int &exitStatus) {
         if (info.contains("FINGER_NOT_RECOGNIZED") && wlrdisplay_status() == 0) {
             sendFeedback("window-close");
             exitStatus = 1;
+            loop.quit();
         } else if (info.contains("ERROR_CANCELED") && wlrdisplay_status() != 0) {
             exitStatus = 1;
+            loop.quit();
+        } else if (info.contains("ERROR_CANCELED") && wlrdisplay_status() == 0) {
+            qDebug() << "Fingerprint timed out. Waiting for finger identification again...";
+            fpdInterface.identify();
         } else {
+            qDebug() << "timed out and reached here";
             exitStatus = 0;
+            loop.quit();
         }
-
-        loop.quit();
     });
 
     qDebug() << "Waiting for finger identification...";
