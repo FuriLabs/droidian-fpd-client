@@ -47,30 +47,55 @@ static bool isCollectionLocked() {
 }
 
 static QString getSessionId() {
-    QString sessionId;
-    FILE *fp = NULL;
-
     while (true) {
-        fp = popen("loginctl list-sessions | awk '/tty7/{print $1}'", "r");
-        if (fp == NULL) {
-            qWarning() << "Failed to run command using popen.";
-            delay(1);
+        QDBusInterface manager("org.freedesktop.login1", "/org/freedesktop/login1", "org.freedesktop.login1.Manager", QDBusConnection::systemBus());
+
+        if (!manager.isValid()) {
+            qDebug() << "Login1 service not available, retrying in 1 second...";
+            QThread::sleep(1);
             continue;
         }
 
-        char buffer[64];
-        if (fgets(buffer, sizeof(buffer), fp) != NULL) {
-            sessionId = QString(buffer).trimmed();
-            pclose(fp);
-            break;
-        } else {
-            qWarning() << "Failed to read output";
-            pclose(fp);
-            delay(1);
+        QDBusMessage reply = manager.call("ListSessionsEx");
+        if (reply.type() == QDBusMessage::ErrorMessage) {
+            qDebug() << "D-Bus call failed:" << reply.errorMessage() << ", retrying in 1 second...";
+            QThread::sleep(1);
+            continue;
         }
-    }
 
-    return sessionId;
+        try {
+            const QDBusArgument arg = reply.arguments().at(0).value<QDBusArgument>();
+            arg.beginArray();
+
+            while (!arg.atEnd()) {
+                arg.beginStructure();
+                QString sessionId;
+                uint32_t uid;
+                QString seat, displayName;
+                uint32_t vtnr;
+                QString name, tty;
+                bool remote;
+                quint64 timestamp;
+                QDBusObjectPath objPath;
+
+                arg >> sessionId >> uid >> seat >> displayName >> vtnr >> name >> tty >> remote >> timestamp >> objPath;
+                arg.endStructure();
+
+                if (tty == "tty7") {
+                    qDebug() << "Found tty7 session:" << sessionId;
+                    return sessionId;
+                }
+            }
+            arg.endArray();
+        } catch (const std::exception& e) {
+            qDebug() << "Error parsing D-Bus response:" << e.what() << ", retrying in 1 second...";
+            QThread::sleep(1);
+            continue;
+        }
+
+        qDebug() << "No tty7 session found, retrying in 1 second...";
+        QThread::sleep(1);
+    }
 }
 
 static void unlockSession(QString &sessionId, int &exitStatus) {
