@@ -109,12 +109,12 @@ static bool isScreenLocked(const QString &sessionId) {
     return false;
 }
 
-static void unlockSession(QString &sessionId, int &exitStatus) {
+static int unlockSession(QString &sessionId) {
     QDBusInterface interface("org.freedesktop.login1", "/org/freedesktop/login1", "org.freedesktop.login1.Manager", QDBusConnection::systemBus());
     if (interface.isValid()) {
         QDBusReply<void> reply = interface.call("UnlockSession", sessionId);
         if (reply.isValid()) {
-            exitStatus = 0;
+            return 0;
         } else {
             qWarning() << "DBus call failed: " << reply.error().message();
             if (reply.error().message().contains("No session") && reply.error().message().contains("known")) {
@@ -123,19 +123,22 @@ static void unlockSession(QString &sessionId, int &exitStatus) {
 
                 reply = interface.call("UnlockSession", sessionId);
                 if (reply.isValid()) {
-                    exitStatus = 0;
+                    return 0;
                 } else {
                     qWarning() << "Retrying DBus call failed: " << reply.error().message();
-                    exitStatus = 1;
+                    return 1;
                 }
             } else {
-                exitStatus = 1;
+                qWarning() << "UnlockSession reply is not valid.";
+                return 1;
             }
         }
     } else {
         qWarning() << "DBus interface is invalid";
-        exitStatus = 1;
+        return 0;
     }
+
+    return 0;
 }
 
 void sendFeedback(const QString &event) {
@@ -156,13 +159,13 @@ void fpdunlocker(QString &sessionId, int &exitStatus) {
     exitStatus = 0;
 
     QObject::connect(&fpdInterface, &FPDInterface::identified, [&](const QString &finger) {
-        qDebug() << "Identified finger: " << finger;
+        qDebug() << "Identified finger:" << finger;
 
         bool keyring_locked = isCollectionLocked();
         bool screen_locked = isScreenLocked(sessionId);
         if (wlrdisplay_status() == 0 && screen_locked && !keyring_locked) {
             sendFeedback("button-released");
-            unlockSession(sessionId, exitStatus);
+            exitStatus = unlockSession(sessionId);
         } else {
             if (keyring_locked)
                 qDebug() << "Keyring is still locked, discarding fingerprint request";
