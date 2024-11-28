@@ -98,14 +98,28 @@ static QString getSessionId() {
     }
 }
 
-static bool isScreenLocked(const QString &sessionId) {
+static bool isScreenLocked(QString &sessionId) {
     QString sessionPath = QString("/org/freedesktop/login1/session/%1").arg(sessionId);
     QDBusInterface props("org.freedesktop.login1", sessionPath, "org.freedesktop.DBus.Properties", QDBusConnection::systemBus());
 
     QDBusReply<QVariant> reply = props.call("Get", "org.freedesktop.login1.Session",  "LockedHint");
     if (reply.isValid()) {
         return reply.value().toBool();
+    } else {
+        sessionId = getSessionId();
+        qDebug() << "Got a new session id:" << sessionId;
+        sessionPath = QString("/org/freedesktop/login1/session/%1").arg(sessionId);
+
+        QDBusInterface props("org.freedesktop.login1", sessionPath, "org.freedesktop.DBus.Properties", QDBusConnection::systemBus());
+        QDBusReply<QVariant> reply = props.call("Get", "org.freedesktop.login1.Session", "LockedHint");
+
+        if (reply.isValid()) {
+            return reply.value().toBool();
+        } else {
+            qDebug() << "The newly acquired session id is not valid:" << sessionId;
+        }
     }
+
     return false;
 }
 
