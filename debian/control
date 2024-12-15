@@ -4,7 +4,6 @@ Priority: optional
 Maintainer: Bardia Moshiri <fakeshell@bardia.tech>
 Build-Depends: debhelper-compat (= 13),
                qt6-base-dev,
-               qt6-declarative-dev,
                cmake,
                g++,
                libc6-dev,
@@ -25,24 +24,6 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
          libbatman-wrappers,
 Description: Droidian fingerprint client
   Droidian fingerprint enrollment and client.
-
-Package: droidian-fpd-gui
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends},
-         libqt6core6,
-         libqt6gui6 | libqt6gui6-gles,
-         libqt6dbus6,
-         libqt6qml6,
-         libqt6quick6,
-         libqt6quickcontrols2-6,
-         qml6-module-qtquick,
-         qml6-module-qtquick-controls,
-         qml6-module-qtqml-workerscript,
-         qml6-module-qtquick-templates,
-         qml6-module-qtquick-window,
-         libbatman-wrappers,
-Description: Droidian fingerprint gui
-  Droidian fingerprint gui
 
 Package: libpam-fpd
 Architecture: any
