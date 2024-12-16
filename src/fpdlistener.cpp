@@ -16,7 +16,7 @@
 #include "fpdinterface.h"
 
 extern "C" int wlrdisplay_status() {
-    int result = wlrdisplay(0, NULL);
+    int result = get_wlroots_screen_status();
     return result != 0;
 }
 
