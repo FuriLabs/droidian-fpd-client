@@ -2,6 +2,7 @@ Source: droidian-fpd-client
 Section: misc
 Priority: optional
 Maintainer: Bardia Moshiri <fakeshell@bardia.tech>
+XS-FuriOS-Extra-Repos: deb http://furilabs-batman.repo.furios.io/trixie-no-polling/ trixie main
 Build-Depends: debhelper-compat (= 13),
                qt6-base-dev,
                qt6-declarative-dev,
