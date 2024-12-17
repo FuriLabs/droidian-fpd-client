@@ -6,22 +6,17 @@ XS-FuriOS-Extra-Repos: deb http://furilabs-batman.repo.furios.io/trixie-no-polli
 Build-Depends: debhelper-compat (= 13),
                qt6-base-dev,
                cmake,
-               g++,
                libc6-dev,
                libpam0g-dev,
                batman-dev,
                libwayland-dev,
-               libupower-glib-dev,
                libbatman-wrappers,
-               bash,
                dh-exec
 Standards-Version: 4.5.1
 
 Package: droidian-fpd-client
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, 
-         libqt6core6,
-         libqt6dbus6,
          libbatman-wrappers,
 Description: Droidian fingerprint client
   Droidian fingerprint enrollment and client.
@@ -36,7 +31,5 @@ Description: Droidian fingerprint pam
 Package: fpd2fprintd
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends},
-         libqt6dbus6,
-         libqt6core6,
 Description: Droidian fprintd adaptation
   Droidian fpd to fprintd adaptation
