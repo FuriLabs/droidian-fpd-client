@@ -205,13 +205,14 @@ private:
 
         QObject::connect(fpdInterface, &FPDInterface::errorInfo, this, [=](const QString &info) {
             qDebug() << "Error info:" << info;
+            bool screen_locked = isScreenLocked(m_sessionId);
 
             // Handle errors:
-            // - If finger not recognized and display is on: try again (no quit)
+            // - If finger not recognized and display is on and screen is still locked: try again (no quit)
             // - If canceled and display is off: end (quit)
-            // - If canceled and display is on (timeout): try again (no quit)
+            // - If canceled and display is on and screen is still locked (timeout): try again (no quit)
             // - Anything else: end (quit)
-            if (info.contains("FINGER_NOT_RECOGNIZED") && wlrdisplay_status() == 0) {
+            if (info.contains("FINGER_NOT_RECOGNIZED") && wlrdisplay_status() == 0 && screen_locked) {
                 sendFeedback("window-close");
                 qDebug() << "Finger not recognized. Asking again...";
                 fpdInterface->identify();
@@ -219,11 +220,13 @@ private:
                 // Display is off, no point in continuing
                 qDebug() << "Operation canceled and display is off. Stopping attempts.";
                 loop->quit();
-            } else if (info.contains("ERROR_CANCELED") && wlrdisplay_status() == 0) {
+            } else if (info.contains("ERROR_CANCELED") && wlrdisplay_status() == 0 && screen_locked) {
                 // Display is on, means it timed out, let's try again
                 qDebug() << "Fingerprint timed out. Waiting for finger identification again...";
                 fpdInterface->identify();
             } else {
+                if (!screen_locked)
+                    qDebug() << "Operation canceled and display is unlocked. Stopping attempts.";
                 loop->quit();
             }
         });
