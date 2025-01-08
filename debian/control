@@ -7,14 +7,14 @@ Build-Depends: debhelper-compat (= 13),
                cmake,
                libc6-dev,
                libpam0g-dev,
-               batman-dev,
+               batman-dev (>= 33),
                dh-exec
 Standards-Version: 4.5.1
 
 Package: droidian-fpd-client
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, 
-         libbatman-wrappers,
+         libbatman-wrappers (>= 33),
 Description: Droidian fingerprint client
   Droidian fingerprint enrollment and client.
 
