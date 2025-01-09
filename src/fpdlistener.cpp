@@ -249,17 +249,83 @@ class IdleHintListener : public QObject {
     Q_OBJECT
 public:
     IdleHintListener(const QString &sessionId, QObject *parent = nullptr)
-        : QObject(parent), m_sessionId(sessionId), m_unlocker(new FpdUnlocker(sessionId, this)) {}
+        : QObject(parent), m_sessionId(sessionId), m_unlocker(new FpdUnlocker(sessionId, this)) {
+        setupDBusConnection();
+    }
+
+    void setupDBusConnection() {
+        QString sessionPath = QString("/org/freedesktop/login1/session/%1").arg(m_sessionId);
+
+        bool connected = false;
+        while (!connected) {
+            connected = QDBusConnection::systemBus().connect(
+                "org.freedesktop.login1",
+                sessionPath,
+                "org.freedesktop.DBus.Properties",
+                "PropertiesChanged",
+                "sa{sv}as",
+                this,
+                SLOT(onPropertiesChanged(QString,QVariantMap,QStringList))
+            );
+
+            if (!connected) {
+                qWarning() << "Failed to connect to PropertiesChanged signal. Retrying in 1 second...";
+                QThread::sleep(1);
+            }
+        }
+
+        qDebug() << "Connected to session" << m_sessionId << "for property changes";
+    }
+
+    void updateSession(const QString &newSessionId) {
+        QString oldSessionPath = QString("/org/freedesktop/login1/session/%1").arg(m_sessionId);
+        QDBusConnection::systemBus().disconnect(
+            "org.freedesktop.login1",
+            oldSessionPath,
+            "org.freedesktop.DBus.Properties",
+            "PropertiesChanged",
+            this,
+            SLOT(onPropertiesChanged(QString,QVariantMap,QStringList))
+        );
+
+        m_sessionId = newSessionId;
+        delete m_unlocker;
+        m_unlocker = new FpdUnlocker(m_sessionId, this);
+
+        setupDBusConnection();
+    }
 
 public slots:
     void onPropertiesChanged(const QString &interface_name, const QVariantMap &changed_properties, const QStringList &invalidated_properties) {
         Q_UNUSED(invalidated_properties)
-        if (interface_name == "org.freedesktop.login1.Session" && changed_properties.contains("IdleHint")) {
-            bool idleHint = changed_properties.value("IdleHint").toBool();
-            qDebug() << "IdleHint changed:" << idleHint;
 
-            if (!idleHint)
-                m_unlocker->startUnlockAttempt();
+        if (interface_name == "org.freedesktop.login1.Session") {
+            if (changed_properties.contains("Active")) {
+                bool active = changed_properties.value("Active").toBool();
+                qDebug() << "Active state changed:" << active;
+
+                if (!active) {
+                    qDebug() << "Session became inactive, searching for new active session...";
+                    QThread::sleep(10);
+                    QString newSessionId;
+                    do {
+                        newSessionId = getSessionId();
+                        if (newSessionId == m_sessionId) {
+                            qDebug() << "Got the same session ID, waiting 1 second before retrying...";
+                            QThread::sleep(1);
+                        }
+                    } while (newSessionId == m_sessionId);
+
+                    qDebug() << "Found new session:" << newSessionId << ", updating listener...";
+                    updateSession(newSessionId);
+                }
+            } else if (changed_properties.contains("IdleHint")) {
+                bool idleHint = changed_properties.value("IdleHint").toBool();
+                qDebug() << "IdleHint changed:" << idleHint;
+
+                if (!idleHint)
+                    m_unlocker->startUnlockAttempt();
+            }
         }
     }
 
@@ -269,29 +335,8 @@ private:
 };
 
 void listenForIdleHint(const QString &sessionId) {
-    QString sessionPath = QString("/org/freedesktop/login1/session/%1").arg(sessionId);
-
     IdleHintListener *listener = new IdleHintListener(sessionId);
-
-    bool connected = false;
-    while (!connected) {
-        connected = QDBusConnection::systemBus().connect(
-            "org.freedesktop.login1",
-            sessionPath,
-            "org.freedesktop.DBus.Properties",
-            "PropertiesChanged",
-            "sa{sv}as",
-            listener,
-            SLOT(onPropertiesChanged(QString,QVariantMap,QStringList))
-        );
-
-        if (!connected) {
-            qWarning() << "Failed to connect to PropertiesChanged signal for IdleHint. Retrying in 1 second...";
-            QThread::sleep(1);
-        }
-    }
-
-    qDebug() << "Listening for IdleHint changes...";
+    qDebug() << "Initial listener setup complete for session:" << sessionId;
 }
 
 int main(int argc, char *argv[]) {
