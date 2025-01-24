@@ -8,4 +8,4 @@ StartLimitIntervalSec=0
 [Service]
 Type=simple
 Restart=always
-ExecStart=/usr/bin/fpdlistener
+ExecStart=/usr/libexec/fpdlistener
