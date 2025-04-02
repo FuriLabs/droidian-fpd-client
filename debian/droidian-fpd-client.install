@@ -1,4 +1,0 @@
-/usr/libexec/fpdlistener
-/usr/bin/droidian-fpd-client
-/usr/libexec/fpd/droidian-fpd-identify
-/usr/lib/systemd/user/fpdlistener.service
